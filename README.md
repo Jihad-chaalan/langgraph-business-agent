@@ -63,14 +63,16 @@ graph TD
     lookup --> assess[accounting_assessment]
     assess --> |low| collect[collect_debt]
     assess --> |acceptable| good[accounting_assessment_good]
-    collect --> send_email[send_email <br/><i>interrupt before</i>]
+    collect --> send_email[send_email (interrupt before)]
     send_email --> format[format_response]
     good --> format
     inv_lookup --> inv_assess[inventory_assessment]
     inv_assess --> format
     format --> END
+```
 
-Node descriptions
+## Node descriptions
+
 classify_question – LLM classifies query as accounting or inventory.
 
 accounting_lookup – Uses bind_tools to call get_account_balance (CSV lookup).
@@ -89,7 +91,8 @@ inventory_assessment – LLM advises on restocking based on min/current quantiti
 
 format_response – Formats final answer for display.
 
-👤 Human‑in‑the‑Loop Approval
+## 👤 Human‑in‑the‑Loop Approval
+
 When a low cash balance triggers debt collection:
 
 The graph runs until just before send_email.
@@ -101,4 +104,3 @@ The user approves (y) or rejects (n) via input.
 The graph resumes using update_state(..., as_node="node_send_email").
 
 The email is marked as sent or rejected, and the final answer is displayed.
-```
