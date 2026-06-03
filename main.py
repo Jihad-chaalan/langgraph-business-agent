@@ -6,6 +6,7 @@ from langchain.agents import create_agent
 from langchain.tools import tool
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
+from langgraph.checkpoint.memory import MemorySaver
 
 load_dotenv()
 
@@ -102,6 +103,7 @@ class AgentState(TypedDict):
     message: str | None
     inventory_quantity: dict | None
     final_answer: str | None
+    email_approved: bool | None
 
 
 #--------------------- Create Graph Nodes ----------
@@ -232,6 +234,20 @@ def collect_debt(state: AgentState):
         return {"message": "No further action needed."}
     
 
+
+    ####### ADD NEW Node for send email simulating
+def send_email(state: AgentState):
+    # Check if human approved (this flag is set via update_state)
+    approved = state.get("email_approved", False)
+    
+    email_content = state.get("message", "")
+    if approved and "Recommendation to collect debt" in email_content:
+        # Simulate sending email (in real life, use SMTP or an API)
+        print(f"\n📧 SENDING EMAIL:\n{email_content}\n")
+        return {"message": email_content + "\n\n✅ Email sent successfully."}
+    else:
+        return {"message": email_content + "\n\n❌ Email not sent (pending approval or rejected)."}
+
     # Node 5: @@@@@ Accounting - Good standing Account @@@@@
 def accounting_assessment_good(state: AgentState):
     balance = state["account_balance"]
@@ -296,6 +312,7 @@ graph.add_node("node_classify", classify_question)
 graph.add_node("node_account_lookup", accounting_lookup)
 graph.add_node("node_account_assessment", accounting_assessment)
 graph.add_node("node_collect_debt", collect_debt)
+graph.add_node("node_send_email", send_email)
 graph.add_node("node_account_good_standing", accounting_assessment_good)
 graph.add_node("node_inventory_lookup", inventory_lookup)
 graph.add_node("node_inventory_assessment", inventory_assessment)
@@ -334,7 +351,8 @@ graph.add_conditional_edges(
 )
 
 graph.add_edge("node_account_good_standing", "node_final_format")
-graph.add_edge("node_collect_debt", "node_final_format")
+graph.add_edge("node_collect_debt", "node_send_email")
+graph.add_edge("node_send_email", "node_final_format")
 
 # Inventory chain
 graph.add_edge("node_inventory_lookup", "node_inventory_assessment")
@@ -344,29 +362,93 @@ graph.add_edge("node_inventory_assessment", "node_final_format")
 graph.add_edge("node_final_format", END)
 
 # ------------- Compile Graph ---------------------
-app = graph.compile()
+memory = MemorySaver()#adding memory saver 
+app = graph.compile(checkpointer=memory, interrupt_before=["node_send_email"])
 
 # ----------------- Run Example -----------------------------
 # Scenario 1: ask about Cash balance
-print("#"*30)
-result = app.invoke({"query": "What is the status of our cash balance?"})
-print("\n=== RESPONSE 1 ===")
-print(result["final_answer"])
+# print("#"*30)
+# config = {"configurable": {"thread_id": "test_session"}}
+# result = app.invoke({"query": "What is the status of our cash balance?"}, config)
 
-# Scenario 2: ask about investment
+# state = app.get_state(config)
+# email_draft = state.values["message"]
+# print("📝 DRAFT EMAIL:\n", email_draft)
+
+# # Human approves (or rejects) by updating state
+# app.update_state(config, {"email_approved": True})   # or False to reject
+
+# final = app.invoke(None, config)
+
+# print("\n=== RESPONSE 1 ===")
+# print(final["final_answer"])
+# Scenario 1: ask about Cash balance after adding human in the loop@@@@@@
+config = {"configurable": {"thread_id": "test_session"}}
+
+# Start the graph – will pause before node_send_email
+result = app.invoke({"query": "What is the status of our cash balance?"}, config)
+
+state = app.get_state(config)
+
+# Check if we paused before send_email
+if state.next and "node_send_email" in state.next:
+    email_draft = state.values.get("message", "No draft")
+    print("📝 DRAFT EMAIL:\n", email_draft)
+    choice = input("Approve email? (y/n): ")
+    approved = choice.lower() == 'y'
+    
+    # ✅ CRITICAL: use as_node to tell LangGraph this update comes from the interrupted node
+    app.update_state(
+        config,
+        {"email_approved": approved},
+        as_node="node_send_email"
+    )
+    
+    # Resume execution
+    final = app.invoke(None, config)
+else:
+    # Graph finished without interruption (e.g., acceptable balance)
+    final = result
+
+print("\n=== RESPONSE 1 ===")
+print(final["final_answer"])
+
+# # Scenario 2: ask about investment
+# print("#"*30)
+# result = app.invoke({"query": "check our payroll balance if adequet for a small shop?"})
+# print("\n=== RESPONSE 2 ===")
+# print(result["final_answer"])
+
+# # Scenario 3: ask about Inventory
+# print("#"*30)
+# result2 = app.invoke({"query": "Do we need to restock monitors?"})
+# print("\n=== RESPONSE 3 ===")
+# print(result2["final_answer"])
+
+# # Scenario 4: ask about Inventory
+# print("#"*30)
+# result2 = app.invoke({"query": "Do we need to restock keyboards?"})
+# print("\n=== RESPONSE 4 ===")
+# print(result2["final_answer"])
+
+
+# Scenario 2 (accounting)
 print("#"*30)
-result = app.invoke({"query": "check our payroll balance if adequet for a small shop?"})
+config2 = {"configurable": {"thread_id": "session_2"}}
+result = app.invoke({"query": "check our payroll balance if adequet for a small shop?"}, config2)
 print("\n=== RESPONSE 2 ===")
 print(result["final_answer"])
 
-# Scenario 3: ask about Inventory
+# Scenario 3 (inventory)
 print("#"*30)
-result2 = app.invoke({"query": "Do we need to restock monitors?"})
+config3 = {"configurable": {"thread_id": "session_3"}}
+result2 = app.invoke({"query": "Do we need to restock monitors?"}, config3)
 print("\n=== RESPONSE 3 ===")
 print(result2["final_answer"])
 
-# Scenario 4: ask about Inventory
+# Scenario 4 (inventory)
 print("#"*30)
-result2 = app.invoke({"query": "Do we need to restock keyboards?"})
+config4 = {"configurable": {"thread_id": "session_4"}}
+result2 = app.invoke({"query": "Do we need to restock keyboards?"}, config4)
 print("\n=== RESPONSE 4 ===")
 print(result2["final_answer"])
