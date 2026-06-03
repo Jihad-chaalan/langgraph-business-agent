@@ -53,20 +53,22 @@ The agent:
 
 ---
 
-🧠 Understanding the Graph Flow
+## 🧠 Understanding the Graph Flow
 
+```mermaid
 graph TD
-START --> classify[classify_question]
-classify --> |accounting| lookup[accounting_lookup]
-classify --> |inventory| inv_lookup[inventory_lookup]
-lookup --> assess[accounting_assessment]
-assess --> |low| collect[collect_debt]
-assess --> |acceptable| good[accounting_assessment_good]
-collect --> format[format_response]
-good --> format
-inv_lookup --> inv_assess[inventory_assessment]
-inv_assess --> format
-format --> END
+    START --> classify[classify_question]
+    classify --> |accounting| lookup[accounting_lookup]
+    classify --> |inventory| inv_lookup[inventory_lookup]
+    lookup --> assess[accounting_assessment]
+    assess --> |low| collect[collect_debt]
+    assess --> |acceptable| good[accounting_assessment_good]
+    collect --> format[format_response]
+    good --> format
+    inv_lookup --> inv_assess[inventory_assessment]
+    inv_assess --> format
+    format --> END
+```
 
 -classify_question: LLM classifies query as accounting or inventory.
 
