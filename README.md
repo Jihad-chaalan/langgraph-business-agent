@@ -63,8 +63,8 @@ graph TD
     lookup --> assess[accounting_assessment]
     assess --> |low| collect[collect_debt]
     assess --> |acceptable| good[accounting_assessment_good]
-    collect --> send_email[send_email (interrupt before)]
-    send_email --> format[format_response]
+    collect --> send_email["send_email(interrupt before)"]
+     send_email --> format[format_response]
     good --> format
     inv_lookup --> inv_assess[inventory_assessment]
     inv_assess --> format
